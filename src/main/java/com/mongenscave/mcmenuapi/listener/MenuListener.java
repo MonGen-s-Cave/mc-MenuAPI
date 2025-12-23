@@ -2,10 +2,13 @@ package com.mongenscave.mcmenuapi.listener;
 
 import com.mongenscave.mcmenuapi.McMenuAPI;
 import com.mongenscave.mcmenuapi.handler.DynamicItemClickHandler;
+import com.mongenscave.mcmenuapi.loader.MenuLoader;
 import com.mongenscave.mcmenuapi.menu.Menu;
 import com.mongenscave.mcmenuapi.menu.PaginatedMenu;
 import com.mongenscave.mcmenuapi.menu.SimpleMenu;
+import com.mongenscave.mcmenuapi.menu.action.Action;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
+import com.mongenscave.mcmenuapi.registry.ActionHandlerRegistry;
 import com.mongenscave.mcmenuapi.registry.DynamicClickRegistry;
 import lombok.RequiredArgsConstructor;
 import org.bukkit.entity.Player;
@@ -73,6 +76,22 @@ public class MenuListener implements Listener {
         }
 
         if (menuItem != null && menuItem.isClickable()) {
+            for (Action action : menuItem.getActions()) {
+                if (action instanceof MenuLoader.CustomAction customAction) {
+                    ActionHandlerRegistry.ActionHandler handler = ActionHandlerRegistry.getHandler(
+                            player.getUniqueId(),
+                            menuFileName != null ? menuFileName : "unknown",
+                            customAction.getActionName()
+                    );
+
+                    if (handler != null && menuFileName != null) {
+                        handler.handle(player, clickedItem, event.getClick(), menuFileName, slot);
+                    }
+                } else {
+                    action.execute(player);
+                }
+            }
+
             menuItem.onClick(player);
         }
     }
@@ -86,14 +105,12 @@ public class MenuListener implements Listener {
         Menu menu = menuAPI.getOpenMenus().get(player.getUniqueId());
         if (menu != null && menu.getInventory(player) == event.getInventory()) {
             menuAPI.getOpenMenus().remove(player.getUniqueId());
+            ActionHandlerRegistry.clearPlayer(player.getUniqueId());
         }
     }
 
     /**
      * Get the menu file name for a menu instance
-     *
-     * @param menu The menu
-     * @return The file name, or null if not found
      */
     private String getMenuFileName(@NotNull Menu menu) {
         return menuAPI.getLoadedMenus().entrySet().stream()

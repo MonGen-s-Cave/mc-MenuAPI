@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)
 ![Minecraft](https://img.shields.io/badge/minecraft-1.21+-green.svg)
 ![Java](https://img.shields.io/badge/java-21-orange.svg)
 ![License](https://img.shields.io/badge/license-MIT-purple.svg)
@@ -78,7 +78,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mongenscave:mc-MenuAPI:1.0.2")
+    implementation("com.mongenscave:mc-MenuAPI:1.0.3")
 }
 ```
 
@@ -90,7 +90,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.mongenscave:mc-MenuAPI:1.0.2'
+    implementation 'com.mongenscave:mc-MenuAPI:1.0.3'
 }
 ```
 
@@ -108,7 +108,7 @@ dependencies {
     <dependency>
         <groupId>com.mongenscave</groupId>
         <artifactId>mc-MenuAPI</artifactId>
-        <version>1.0.2</version>
+        <version>1.0.3</version>
     </dependency>
 </dependencies>
 ```

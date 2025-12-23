@@ -6,6 +6,7 @@ import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import com.mongenscave.mcmenuapi.processor.ColorProcessor;
 import com.mongenscave.mcmenuapi.registry.DynamicClickRegistry;
 import com.mongenscave.mcmenuapi.registry.DynamicMenuRegistry;
+import com.mongenscave.mcmenuapi.registry.PlaceholderRegistry;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -18,11 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Simple implementation of the Menu interface
+ * Enhanced SimpleMenu with action-based system and dynamic placeholders
  */
 @Getter
 public class SimpleMenu implements Menu {
-
     private final String title;
     private final int size;
     private final Map<String, MenuItem> items;
@@ -50,12 +50,25 @@ public class SimpleMenu implements Menu {
 
     @Override
     public void open(@NotNull Player player) {
-        Inventory inventory = Bukkit.createInventory(null, size, title);
+        Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
+        String menuFileName = getMenuFileNameForPlayer(player);
+
+        if (menuFileName != null) {
+            Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
+            allPlaceholders.putAll(dynamicPlaceholders);
+        }
+
+        String processedTitle = title;
+        for (Map.Entry<String, String> entry : allPlaceholders.entrySet()) {
+            processedTitle = processedTitle.replace(entry.getKey(), entry.getValue());
+        }
+
+        Inventory inventory = Bukkit.createInventory(null, size, ColorProcessor.process(processedTitle));
 
         items.values().stream()
                 .sorted(Comparator.comparingInt(MenuItem::getPriority))
                 .forEach(menuItem -> {
-                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
                     for (int slot : replaced.getSlots()) {
                         if (slot >= 0 && slot < size) {
                             inventory.setItem(slot, replaced.getItemStack().clone());
@@ -84,10 +97,17 @@ public class SimpleMenu implements Menu {
             Inventory inventory = openInventories.get(player.getUniqueId());
             inventory.clear();
 
+            Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
+            String menuFileName = getMenuFileNameForPlayer(player);
+            if (menuFileName != null) {
+                Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
+                allPlaceholders.putAll(dynamicPlaceholders);
+            }
+
             items.values().stream()
                     .sorted(Comparator.comparingInt(MenuItem::getPriority))
                     .forEach(menuItem -> {
-                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
                         for (int slot : replaced.getSlots()) {
                             if (slot >= 0 && slot < size) {
                                 inventory.setItem(slot, replaced.getItemStack().clone());
@@ -150,12 +170,6 @@ public class SimpleMenu implements Menu {
         return this;
     }
 
-    /**
-     * Enables pagination for this menu
-     *
-     * @param totalPages the total number of pages
-     * @return this menu
-     */
     public SimpleMenu setPaginated(int totalPages) {
         this.paginated = true;
         this.totalPages = Math.max(1, totalPages);
@@ -172,12 +186,21 @@ public class SimpleMenu implements Menu {
         if (builder != null) {
             DynamicClickRegistry.clearMenu(fileName);
 
-            Inventory inventory = Bukkit.createInventory(null, size, title);
+            Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
+            Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, fileName);
+            allPlaceholders.putAll(dynamicPlaceholders);
+
+            String processedTitle = title;
+            for (Map.Entry<String, String> entry : allPlaceholders.entrySet()) {
+                processedTitle = processedTitle.replace(entry.getKey(), entry.getValue());
+            }
+
+            Inventory inventory = Bukkit.createInventory(null, size, ColorProcessor.process(processedTitle));
 
             items.values().stream()
                     .sorted(Comparator.comparingInt(MenuItem::getPriority))
                     .forEach(menuItem -> {
-                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
                         for (int slot : replaced.getSlots()) {
                             if (slot >= 0 && slot < size) {
                                 inventory.setItem(slot, replaced.getItemStack().clone());
@@ -197,16 +220,21 @@ public class SimpleMenu implements Menu {
         }
     }
 
-    /**
-     * Gets the menu item at a specific slot
-     *
-     * @param slot the slot
-     * @return the menu item, or null if not found
-     */
     @Nullable
     public MenuItem getItemAtSlot(int slot) {
         return items.values().stream()
                 .filter(item -> item.getSlots().contains(slot))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String getMenuFileNameForPlayer(@NotNull Player player) {
+        return com.mongenscave.mcmenuapi.McMenuAPI.getInstance()
+                .getLoadedMenus()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getValue() == this)
+                .map(Map.Entry::getKey)
                 .findFirst()
                 .orElse(null);
     }

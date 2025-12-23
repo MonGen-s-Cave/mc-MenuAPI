@@ -22,10 +22,7 @@ import java.util.function.Predicate;
 public class MenuLoader {
 
     /**
-     * Loads a menu from a YAML file
-     *
-     * @param file the YAML file
-     * @return the loaded menu, or null if failed
+     * Loads a menu from a YAML file with enhanced action parsing
      */
     @Nullable
     public SimpleMenu loadMenu(@NotNull File file) {
@@ -47,7 +44,7 @@ public class MenuLoader {
                     Section itemSection = itemsSection.getSection(key);
                     if (itemSection == null) continue;
 
-                    MenuItem menuItem = loadMenuItem(itemSection);
+                    MenuItem menuItem = loadMenuItem(itemSection, key);
                     if (menuItem != null) {
                         menu.setItem(key, menuItem);
                     }
@@ -67,12 +64,9 @@ public class MenuLoader {
 
     /**
      * Loads a menu item from a configuration section
-     *
-     * @param section the configuration section
-     * @return the loaded menu item, or null if failed
      */
     @Nullable
-    private MenuItem loadMenuItem(@NotNull Section section) {
+    private MenuItem loadMenuItem(@NotNull Section section, @NotNull String itemKey) {
         Optional<ItemStack> itemStackOpt = ItemFactory.buildItem(section);
 
         if (itemStackOpt.isEmpty()) {
@@ -101,20 +95,28 @@ public class MenuLoader {
         int priority = section.getInt("priority", 0);
         boolean clickable = section.getBoolean("clickable", true);
 
-        return MenuItem.builder()
+        Map<String, String> metadata = new HashMap<>();
+        Section metadataSection = section.getSection("metadata");
+        if (metadataSection != null) {
+            for (String key : metadataSection.getRoutesAsStrings(false)) {
+                metadata.put(key, metadataSection.getString(key, ""));
+            }
+        }
+
+        MenuItem.MenuItemBuilder builder = MenuItem.builder()
                 .itemStack(itemStack)
                 .slots(slots)
                 .actions(actions)
                 .priority(priority)
-                .clickable(clickable)
-                .build();
+                .clickable(clickable);
+
+        metadata.forEach(builder::placeholder);
+
+        return builder.build();
     }
 
     /**
-     * Parses slot configuration
-     *
-     * @param slotConfig the slot configuration
-     * @return list of slots
+     * Parses slot configuration (supports single, list, and ranges)
      */
     @NotNull
     private List<Integer> parseSlots(@Nullable Object slotConfig) {
@@ -163,14 +165,7 @@ public class MenuLoader {
     }
 
     /**
-     * Parses an action string
-     * <p>
-     * NOW SUPPORTS:
-     * - Regular actions: [COMMAND] say hello
-     * - Conditional actions: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
-     *
-     * @param actionString the action string
-     * @return the parsed action, or null if invalid
+     * Parses an action string with support for [ACTION:NAME] custom actions
      */
     @Nullable
     private Action parseAction(@NotNull String actionString) {
@@ -210,17 +205,13 @@ public class MenuLoader {
             case "OPEN" -> Action.open(value);
             case "BROADCAST" -> Action.broadcast(value);
             case "PAGE" -> Action.page(value);
+            case "ACTION" -> new CustomAction(value);
             default -> null;
         };
     }
 
     /**
      * Parses a conditional action
-     * <p>
-     * Format: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
-     *
-     * @param actionString the full conditional action string
-     * @return the conditional action
      */
     @Nullable
     private Action parseConditionalAction(@NotNull String actionString) {
@@ -264,11 +255,6 @@ public class MenuLoader {
 
     /**
      * Parses multiple actions from a string
-     * <p>
-     * Example: "[OPEN] main.yml [SOUND] UI_BUTTON_CLICK"
-     *
-     * @param actionsString the actions string
-     * @return list of parsed actions
      */
     @NotNull
     private List<Action> parseMultipleActions(@NotNull String actionsString) {
@@ -287,5 +273,24 @@ public class MenuLoader {
         }
 
         return actions;
+    }
+
+    /**
+     * Custom action implementation that stores the action name
+     */
+    public static class CustomAction implements Action {
+        private final String actionName;
+
+        public CustomAction(@NotNull String actionName) {
+            this.actionName = actionName.toUpperCase();
+        }
+
+        @Override
+        public void execute(@NotNull org.bukkit.entity.Player player) {}
+
+        @NotNull
+        public String getActionName() {
+            return actionName;
+        }
     }
 }
