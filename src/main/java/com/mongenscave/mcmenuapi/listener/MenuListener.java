@@ -44,29 +44,29 @@ public class MenuListener implements Listener {
             return;
         }
 
-        event.setCancelled(true);
-
         int slot = event.getRawSlot();
 
         if (slot < 0 || slot >= menu.getSize()) {
             return;
         }
 
+        // KRITIKUS: Ellenőrizzük, hogy placeable slot-e
+        if (menu instanceof SimpleMenu simpleMenu && simpleMenu.isSlotPlaceable(slot)) {
+            // Ha placeable, NE canceljük az eventet - engedd a játékosnak!
+            return;
+        }
+
+        // Ha NEM placeable, AKKOR cancel-eld
+        event.setCancelled(true);
+
         ItemStack clickedItem = event.getCurrentItem();
-        if (clickedItem == null) {
+        if (clickedItem == null || clickedItem.getType().isAir()) {
             return;
         }
 
         String menuFileName = getMenuFileName(menu);
 
-        if (menuFileName != null) {
-            DynamicItemClickHandler dynamicHandler = DynamicClickRegistry.getHandler(menuFileName, slot);
-            if (dynamicHandler != null) {
-                dynamicHandler.onClick(player, clickedItem, event.getClick());
-                return;
-            }
-        }
-
+        // Keressük meg a MenuItem-et
         MenuItem menuItem = null;
 
         if (menu instanceof PaginatedMenu paginatedMenu) {
@@ -75,9 +75,12 @@ public class MenuListener implements Listener {
             menuItem = simpleMenu.getItemAtSlot(slot);
         }
 
+        // Ha van MenuItem és clickable, futtassuk le az action-öket
         if (menuItem != null && menuItem.isClickable()) {
+            // 1. YAML-ből jövő action-ök (CLOSE, OPEN, SOUND, ACTION, stb.)
             for (Action action : menuItem.getActions()) {
                 if (action instanceof MenuLoader.CustomAction customAction) {
+                    // Custom ACTION handler
                     ActionHandlerRegistry.ActionHandler handler = ActionHandlerRegistry.getHandler(
                             player.getUniqueId(),
                             menuFileName != null ? menuFileName : "unknown",
@@ -88,11 +91,21 @@ public class MenuListener implements Listener {
                         handler.handle(player, clickedItem, event.getClick(), menuFileName, slot);
                     }
                 } else {
+                    // Normál action (CLOSE, OPEN, SOUND, MESSAGE, stb.)
                     action.execute(player);
                 }
             }
 
+            // 2. Custom onClick handler (ha van)
             menuItem.onClick(player);
+        }
+
+        // 3. Dynamic handler (ha van) - ez fut UTOLJÁRA
+        if (menuFileName != null) {
+            DynamicItemClickHandler dynamicHandler = DynamicClickRegistry.getHandler(menuFileName, slot);
+            if (dynamicHandler != null) {
+                dynamicHandler.onClick(player, clickedItem, event.getClick());
+            }
         }
     }
 
@@ -109,9 +122,6 @@ public class MenuListener implements Listener {
         }
     }
 
-    /**
-     * Get the menu file name for a menu instance
-     */
     private String getMenuFileName(@NotNull Menu menu) {
         return menuAPI.getLoadedMenus().entrySet().stream()
                 .filter(entry -> entry.getValue() == menu)

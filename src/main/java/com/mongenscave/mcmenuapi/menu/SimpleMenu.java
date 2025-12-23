@@ -18,9 +18,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-/**
- * Enhanced SimpleMenu with action-based system and dynamic placeholders
- */
 @Getter
 public class SimpleMenu implements Menu {
     private final String title;
@@ -31,6 +28,7 @@ public class SimpleMenu implements Menu {
     private final Map<UUID, Integer> playerPages;
     private final List<Consumer<Player>> closeHandlers;
     private final List<Consumer<Player>> openHandlers;
+    private List<Integer> placeableSlots;
 
     private boolean paginated;
     private int totalPages;
@@ -44,8 +42,17 @@ public class SimpleMenu implements Menu {
         this.playerPages = new ConcurrentHashMap<>();
         this.closeHandlers = Collections.synchronizedList(new ArrayList<>());
         this.openHandlers = Collections.synchronizedList(new ArrayList<>());
+        this.placeableSlots = new ArrayList<>();
         this.paginated = false;
         this.totalPages = 1;
+    }
+
+    public void setPlaceableSlots(@NotNull List<Integer> slots) {
+        this.placeableSlots = new ArrayList<>(slots);
+    }
+
+    public boolean isSlotPlaceable(int slot) {
+        return placeableSlots.contains(slot);
     }
 
     @Override
@@ -123,6 +130,11 @@ public class SimpleMenu implements Menu {
     }
 
     @Override
+    public @NotNull Map<String, MenuItem> getItems() {
+        return new HashMap<>(items);
+    }
+
+    @Override
     public @NotNull Menu setItem(@NotNull String key, @NotNull MenuItem item) {
         items.put(key, item);
         return this;
@@ -146,6 +158,11 @@ public class SimpleMenu implements Menu {
     }
 
     @Override
+    public boolean isPaginated() {
+        return paginated;
+    }
+
+    @Override
     public int getCurrentPage(@NotNull Player player) {
         return playerPages.getOrDefault(player.getUniqueId(), 0);
     }
@@ -156,6 +173,11 @@ public class SimpleMenu implements Menu {
             playerPages.put(player.getUniqueId(), page);
             refresh(player);
         }
+    }
+
+    @Override
+    public int getTotalPages() {
+        return totalPages;
     }
 
     @Override
@@ -176,10 +198,6 @@ public class SimpleMenu implements Menu {
         return this;
     }
 
-    /**
-     * Internal method for opening with a file name reference
-     * Used by McMenuAPI to trigger dynamic builders
-     */
     public void openWithFileName(@NotNull Player player, @NotNull String fileName) {
         DynamicMenuBuilder builder = DynamicMenuRegistry.getBuilder(fileName);
 

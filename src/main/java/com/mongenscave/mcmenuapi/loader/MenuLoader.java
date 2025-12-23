@@ -21,9 +21,6 @@ import java.util.function.Predicate;
 @UtilityClass
 public class MenuLoader {
 
-    /**
-     * Loads a menu from a YAML file with enhanced action parsing
-     */
     @Nullable
     public SimpleMenu loadMenu(@NotNull File file) {
         try {
@@ -37,6 +34,13 @@ public class MenuLoader {
             }
 
             SimpleMenu menu = new SimpleMenu(title, size);
+
+            // Load placeable slots
+            String placeableSlotsStr = document.getString("placeable-slots", "");
+            if (!placeableSlotsStr.isEmpty()) {
+                List<Integer> placeableSlots = parseSlots(placeableSlotsStr);
+                menu.setPlaceableSlots(placeableSlots);
+            }
 
             Section itemsSection = document.getSection("items");
             if (itemsSection != null) {
@@ -62,9 +66,6 @@ public class MenuLoader {
         }
     }
 
-    /**
-     * Loads a menu item from a configuration section
-     */
     @Nullable
     private MenuItem loadMenuItem(@NotNull Section section, @NotNull String itemKey) {
         Optional<ItemStack> itemStackOpt = ItemFactory.buildItem(section);
@@ -115,9 +116,6 @@ public class MenuLoader {
         return builder.build();
     }
 
-    /**
-     * Parses slot configuration (supports single, list, and ranges)
-     */
     @NotNull
     private List<Integer> parseSlots(@Nullable Object slotConfig) {
         switch (slotConfig) {
@@ -164,9 +162,6 @@ public class MenuLoader {
         return Collections.emptyList();
     }
 
-    /**
-     * Parses an action string with support for [ACTION:NAME] custom actions
-     */
     @Nullable
     private Action parseAction(@NotNull String actionString) {
         actionString = actionString.trim();
@@ -210,9 +205,6 @@ public class MenuLoader {
         };
     }
 
-    /**
-     * Parses a conditional action
-     */
     @Nullable
     private Action parseConditionalAction(@NotNull String actionString) {
         try {
@@ -253,9 +245,6 @@ public class MenuLoader {
         }
     }
 
-    /**
-     * Parses multiple actions from a string
-     */
     @NotNull
     private List<Action> parseMultipleActions(@NotNull String actionsString) {
         List<Action> actions = new ArrayList<>();
@@ -275,9 +264,6 @@ public class MenuLoader {
         return actions;
     }
 
-    /**
-     * Custom action implementation that stores the action name
-     */
     public static class CustomAction implements Action {
         private final String actionName;
 
