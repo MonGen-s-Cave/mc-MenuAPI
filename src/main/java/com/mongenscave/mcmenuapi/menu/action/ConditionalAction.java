@@ -2,6 +2,7 @@ package com.mongenscave.mcmenuapi.menu.action;
 
 import lombok.RequiredArgsConstructor;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -59,6 +60,8 @@ public class ConditionalAction implements Action {
         }
     }
 
+    @NotNull
+    @Contract(" -> new")
     public static Builder builder() {
         return new Builder();
     }

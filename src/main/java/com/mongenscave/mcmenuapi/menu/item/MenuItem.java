@@ -83,16 +83,12 @@ public class MenuItem {
         Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
         allPlaceholders.putAll(placeholders);
 
-        // Add dynamic placeholders
-        dynamicPlaceholders.forEach((key, function) -> {
-            allPlaceholders.put(key, function.apply(player));
-        });
+        dynamicPlaceholders.forEach((key, function) -> allPlaceholders.put(key, function.apply(player)));
 
         ItemStack replaced = itemStack.clone();
         if (replaced.hasItemMeta() && replaced.getItemMeta() != null) {
             var meta = replaced.getItemMeta();
 
-            // Replace in display name
             if (meta.hasDisplayName()) {
                 String displayName = meta.getDisplayName();
                 for (Map.Entry<String, String> entry : allPlaceholders.entrySet()) {
@@ -101,7 +97,6 @@ public class MenuItem {
                 meta.setDisplayName(displayName);
             }
 
-            // Replace in lore
             if (meta.hasLore() && meta.getLore() != null) {
                 List<String> lore = new ArrayList<>(meta.getLore());
                 List<String> replacedLore = new ArrayList<>();
@@ -132,12 +127,10 @@ public class MenuItem {
     public void onClick(@NotNull Player player) {
         if (!clickable) return;
 
-        // Execute custom handler first
         if (customClickHandler != null) {
             customClickHandler.accept(player, this);
         }
 
-        // Execute all actions
         actions.forEach(action -> action.execute(player));
     }
 

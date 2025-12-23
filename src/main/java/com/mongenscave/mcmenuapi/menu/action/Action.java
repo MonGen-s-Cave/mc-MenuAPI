@@ -1,6 +1,7 @@
 package com.mongenscave.mcmenuapi.menu.action;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -22,6 +23,8 @@ public interface Action {
      * @param command the command to execute (without /)
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action command(@NotNull String command) {
         return new CommandAction(command);
     }
@@ -32,6 +35,8 @@ public interface Action {
      * @param command the command to execute (without /)
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action playerCommand(@NotNull String command) {
         return new PlayerCommandAction(command);
     }
@@ -42,6 +47,8 @@ public interface Action {
      * @param command the command to execute (without /)
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action consoleCommand(@NotNull String command) {
         return new ConsoleCommandAction(command);
     }
@@ -52,6 +59,8 @@ public interface Action {
      * @param sound the sound to play
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action sound(@NotNull String sound) {
         return new SoundAction(sound);
     }
@@ -64,6 +73,8 @@ public interface Action {
      * @param pitch the pitch
      * @return the action
      */
+    @NotNull
+    @Contract("_, _, _ -> new")
     static Action sound(@NotNull String sound, float volume, float pitch) {
         return new SoundAction(sound, volume, pitch);
     }
@@ -74,6 +85,8 @@ public interface Action {
      * @param message the message to send
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action message(@NotNull String message) {
         return new MessageAction(message);
     }
@@ -83,6 +96,8 @@ public interface Action {
      *
      * @return the action
      */
+    @NotNull
+    @Contract(value = " -> new", pure = true)
     static Action close() {
         return new CloseAction();
     }
@@ -93,6 +108,8 @@ public interface Action {
      * @param menuFile the menu file to open (e.g., "menu2.yml")
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action open(@NotNull String menuFile) {
         return new OpenMenuAction(menuFile);
     }
@@ -103,6 +120,8 @@ public interface Action {
      * @param message the message to broadcast
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action broadcast(@NotNull String message) {
         return new BroadcastAction(message);
     }
@@ -113,6 +132,8 @@ public interface Action {
      * @param pageChange the page change (e.g., "+1", "-1", "0", "5")
      * @return the action
      */
+    @NotNull
+    @Contract("_ -> new")
     static Action page(@NotNull String pageChange) {
         return new PageAction(pageChange);
     }

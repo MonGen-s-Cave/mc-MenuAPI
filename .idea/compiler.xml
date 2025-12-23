@@ -14,6 +14,6 @@
     <bytecodeTargetLevel target="21" />
   </component>
   <component name="JavacSettings">
-    <option name="ADDITIONAL_OPTIONS_STRING" value="-Xlint:-processing -parameters" />
+    <option name="ADDITIONAL_OPTIONS_STRING" value="-Xlint:-processing" />
   </component>
 </project>

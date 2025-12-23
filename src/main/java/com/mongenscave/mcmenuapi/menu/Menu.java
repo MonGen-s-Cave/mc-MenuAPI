@@ -1,13 +1,11 @@
 package com.mongenscave.mcmenuapi.menu;
 
-import com.mongenscave.mcmenuapi.menu.action.Action;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;

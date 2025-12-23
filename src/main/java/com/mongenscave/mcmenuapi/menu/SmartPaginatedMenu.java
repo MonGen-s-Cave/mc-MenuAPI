@@ -12,6 +12,7 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
@@ -24,12 +25,10 @@ import java.util.function.Consumer;
  * Automatically handles everything from YAML with enhanced features
  */
 public class SmartPaginatedMenu {
-
     @Getter private final PaginatedMenu menu;
     private final YamlDocument config;
 
     private SmartPaginatedMenu(@NotNull String yamlFile, @NotNull Map<String, String> titlePlaceholders) {
-        // Load YAML
         File file = new File(McMenuAPI.getInstance().getMenusFolder(), yamlFile);
 
         try {
@@ -38,25 +37,19 @@ public class SmartPaginatedMenu {
             throw new RuntimeException("Failed to load " + yamlFile, e);
         }
 
-        // Load base menu
         SimpleMenu baseMenu = MenuLoader.loadMenu(file);
         if (baseMenu == null) {
             throw new RuntimeException("Failed to parse " + yamlFile);
         }
 
-        // Store title template and apply placeholders
         String finalTitle = baseMenu.getTitle();
         for (Map.Entry<String, String> entry : titlePlaceholders.entrySet()) {
             finalTitle = finalTitle.replace(entry.getKey(), entry.getValue());
         }
 
-        // Get page slots from YAML
         int[] pageSlots = parsePageSlots();
-
-        // Create paginated menu with processed title
         this.menu = new PaginatedMenu(ColorProcessor.process(finalTitle), baseMenu.getSize(), pageSlots);
 
-        // Auto-add static items from YAML
         autoAddStaticItems(baseMenu);
     }
 
@@ -105,9 +98,7 @@ public class SmartPaginatedMenu {
                     menu.setNextPageItem(smartForward);
                 }
 
-                default -> {
-                    menu.setItem(key, item);
-                }
+                default -> menu.setItem(key, item);
             }
         });
     }
@@ -206,6 +197,8 @@ public class SmartPaginatedMenu {
         }
     }
 
+    @NotNull
+    @Contract(" -> new")
     public static Builder builder() {
         return new Builder();
     }
@@ -259,11 +252,9 @@ public class SmartPaginatedMenu {
         MenuItem build() {
             ItemStack item;
 
-            // Use custom item if provided
             if (customItemStack != null) {
                 item = customItemStack.clone();
             } else {
-                // Load template from YAML
                 var section = config.getSection("dynamic-lists.boxes.template");
                 if (section == null) {
                     section = config.getSection("dynamic-lists.players.template");
@@ -279,12 +270,10 @@ public class SmartPaginatedMenu {
                 }
             }
 
-            // Override material if set
             if (customMaterial != null) {
                 item.setType(customMaterial);
             }
 
-            // Set player head
             if (skullOwner != null && item.getType() == Material.PLAYER_HEAD) {
                 ItemMeta meta = item.getItemMeta();
                 if (meta instanceof SkullMeta skullMeta) {
@@ -293,10 +282,8 @@ public class SmartPaginatedMenu {
                 }
             }
 
-            // Replace placeholders in item
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                // Name
                 if (meta.hasDisplayName()) {
                     String name = meta.getDisplayName();
                     for (Map.Entry<String, String> entry : placeholders.entrySet()) {
@@ -305,7 +292,6 @@ public class SmartPaginatedMenu {
                     meta.setDisplayName(ColorProcessor.process(name));
                 }
 
-                // Lore
                 if (meta.hasLore()) {
                     List<String> lore = new ArrayList<>(meta.getLore());
                     List<String> newLore = new ArrayList<>();
@@ -315,7 +301,6 @@ public class SmartPaginatedMenu {
                             line = line.replace(entry.getKey(), entry.getValue());
                         }
 
-                        // Handle custom lore expansion
                         if (line.contains("{custom_lore}")) {
                             String customLoreValue = placeholders.get("{custom_lore}");
                             if (customLoreValue != null && !customLoreValue.isEmpty()) {

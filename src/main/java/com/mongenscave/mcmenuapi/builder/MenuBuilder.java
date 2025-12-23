@@ -3,6 +3,7 @@ package com.mongenscave.mcmenuapi.builder;
 import com.mongenscave.mcmenuapi.menu.SimpleMenu;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -26,6 +27,8 @@ public class MenuBuilder {
      * @param size the menu size (must be multiple of 9, between 9 and 54)
      * @return a new menu builder
      */
+    @NotNull
+    @Contract("_, _ -> new")
     public static MenuBuilder create(@NotNull String title, int size) {
         // Validate size
         if (size % 9 != 0 || size < 9 || size > 54) {
@@ -40,6 +43,8 @@ public class MenuBuilder {
      * @param title the menu title
      * @return a new menu builder
      */
+    @NotNull
+    @Contract("_ -> new")
     public static MenuBuilder create(@NotNull String title) {
         return create(title, 54);
     }

@@ -34,27 +34,22 @@ public class ConditionParser {
     public Predicate<Player> parse(@NotNull String conditionString) {
         conditionString = conditionString.trim();
 
-        // Page conditions
         if (conditionString.contains("{page}")) {
             return parsePageCondition(conditionString);
         }
 
-        // Health conditions
         if (conditionString.contains("{health}")) {
             return parseHealthCondition(conditionString);
         }
 
-        // Level conditions
         if (conditionString.contains("{level}")) {
             return parseLevelCondition(conditionString);
         }
 
-        // Permission conditions
         if (conditionString.contains("{permission}")) {
             return parsePermissionCondition(conditionString);
         }
 
-        // Name conditions
         if (conditionString.contains("{name}")) {
             return parseNameCondition(conditionString);
         }
@@ -62,6 +57,7 @@ public class ConditionParser {
         return null;
     }
 
+    @NotNull
     private Predicate<Player> parsePageCondition(@NotNull String condition) {
         String[] parts = condition.replace("{page}", "").trim().split(" ", 2);
         if (parts.length < 2) return player -> false;
@@ -87,6 +83,7 @@ public class ConditionParser {
         };
     }
 
+    @NotNull
     private Predicate<Player> parseHealthCondition(@NotNull String condition) {
         String[] parts = condition.replace("{health}", "").trim().split(" ", 2);
         if (parts.length < 2) return player -> false;
@@ -109,6 +106,7 @@ public class ConditionParser {
         };
     }
 
+    @NotNull
     private Predicate<Player> parseLevelCondition(@NotNull String condition) {
         String[] parts = condition.replace("{level}", "").trim().split(" ", 2);
         if (parts.length < 2) return player -> false;
@@ -131,11 +129,13 @@ public class ConditionParser {
         };
     }
 
+    @NotNull
     private Predicate<Player> parsePermissionCondition(@NotNull String condition) {
         String permission = condition.replace("{permission}", "").replace("has", "").trim();
         return player -> player.hasPermission(permission);
     }
 
+    @NotNull
     private Predicate<Player> parseNameCondition(@NotNull String condition) {
         String name = condition.replace("{name}", "").replace("equals", "").trim();
         return player -> player.getName().equalsIgnoreCase(name);

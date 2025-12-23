@@ -18,10 +18,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.Predicate;
 
-/**
- * Utility class for loading menus from YAML files
- * NOW WITH CONDITIONAL ACTIONS!
- */
 @UtilityClass
 public class MenuLoader {
 
@@ -39,37 +35,32 @@ public class MenuLoader {
             String title = document.getString("title", "Menu");
             int size = document.getInt("size", 54);
 
-            // Validate size
             if (size % 9 != 0 || size < 9 || size > 54) {
                 size = 54;
             }
 
             SimpleMenu menu = new SimpleMenu(title, size);
 
-            // Load items
             Section itemsSection = document.getSection("items");
             if (itemsSection != null) {
                 for (String key : itemsSection.getRoutesAsStrings(false)) {
                     Section itemSection = itemsSection.getSection(key);
                     if (itemSection == null) continue;
 
-                    MenuItem menuItem = loadMenuItem(itemSection, key);
+                    MenuItem menuItem = loadMenuItem(itemSection);
                     if (menuItem != null) {
                         menu.setItem(key, menuItem);
                     }
                 }
             }
 
-            // Load pagination settings if exists
             if (document.contains("pagination.enabled") && document.getBoolean("pagination.enabled")) {
                 int pages = document.getInt("pagination.pages", 1);
                 menu.setPaginated(pages);
             }
 
             return menu;
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (IOException exception) {
             return null;
         }
     }
@@ -78,12 +69,10 @@ public class MenuLoader {
      * Loads a menu item from a configuration section
      *
      * @param section the configuration section
-     * @param key the item key
      * @return the loaded menu item, or null if failed
      */
     @Nullable
-    private MenuItem loadMenuItem(@NotNull Section section, @NotNull String key) {
-        // Build the item using ItemFactory
+    private MenuItem loadMenuItem(@NotNull Section section) {
         Optional<ItemStack> itemStackOpt = ItemFactory.buildItem(section);
 
         if (itemStackOpt.isEmpty()) {
@@ -92,7 +81,6 @@ public class MenuLoader {
 
         ItemStack itemStack = itemStackOpt.get();
 
-        // Parse slots
         Object slotConfig = section.get("slot");
         List<Integer> slots = parseSlots(slotConfig);
 
@@ -100,7 +88,6 @@ public class MenuLoader {
             return null;
         }
 
-        // Parse actions (NOW WITH CONDITIONALS!)
         List<Action> actions = new ArrayList<>();
         List<String> actionStrings = section.getStringList("actions");
 
@@ -111,13 +98,9 @@ public class MenuLoader {
             }
         }
 
-        // Parse priority
         int priority = section.getInt("priority", 0);
-
-        // Parse clickable
         boolean clickable = section.getBoolean("clickable", true);
 
-        // Build the menu item
         return MenuItem.builder()
                 .itemStack(itemStack)
                 .slots(slots)
@@ -135,42 +118,45 @@ public class MenuLoader {
      */
     @NotNull
     private List<Integer> parseSlots(@Nullable Object slotConfig) {
-        if (slotConfig == null) {
-            return Collections.emptyList();
-        }
-
-        if (slotConfig instanceof Integer) {
-            return List.of((Integer) slotConfig);
-        }
-
-        if (slotConfig instanceof String) {
-            String slotStr = (String) slotConfig;
-            List<Integer> slots = new ArrayList<>();
-
-            String[] parts = slotStr.split(",");
-            for (String part : parts) {
-                part = part.trim();
-
-                if (part.contains("-")) {
-                    String[] range = part.split("-");
-                    if (range.length == 2) {
-                        try {
-                            int start = Integer.parseInt(range[0].trim());
-                            int end = Integer.parseInt(range[1].trim());
-
-                            for (int i = Math.min(start, end); i <= Math.max(start, end); i++) {
-                                slots.add(i);
-                            }
-                        } catch (NumberFormatException ignored) {}
-                    }
-                } else {
-                    try {
-                        slots.add(Integer.parseInt(part));
-                    } catch (NumberFormatException ignored) {}
-                }
+        switch (slotConfig) {
+            case null -> {
+                return Collections.emptyList();
             }
+            case Integer integer -> {
+                return List.of(integer);
+            }
+            case String slotStr -> {
+                List<Integer> slots = new ArrayList<>();
 
-            return slots;
+                String[] parts = slotStr.split(",");
+                for (String part : parts) {
+                    part = part.trim();
+
+                    if (part.contains("-")) {
+                        String[] range = part.split("-");
+                        if (range.length == 2) {
+                            try {
+                                int start = Integer.parseInt(range[0].trim());
+                                int end = Integer.parseInt(range[1].trim());
+
+                                for (int i = Math.min(start, end); i <= Math.max(start, end); i++) {
+                                    slots.add(i);
+                                }
+                            } catch (NumberFormatException ignored) {
+                            }
+                        }
+                    } else {
+                        try {
+                            slots.add(Integer.parseInt(part));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                }
+
+                return slots;
+            }
+            default -> {
+            }
         }
 
         return Collections.emptyList();
@@ -178,7 +164,7 @@ public class MenuLoader {
 
     /**
      * Parses an action string
-     *
+     * <p>
      * NOW SUPPORTS:
      * - Regular actions: [COMMAND] say hello
      * - Conditional actions: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
@@ -190,12 +176,10 @@ public class MenuLoader {
     private Action parseAction(@NotNull String actionString) {
         actionString = actionString.trim();
 
-        // Check if it's a conditional action
         if (actionString.startsWith("[IF]")) {
             return parseConditionalAction(actionString);
         }
 
-        // Regular action parsing
         if (!actionString.contains("]")) {
             return null;
         }
@@ -232,7 +216,7 @@ public class MenuLoader {
 
     /**
      * Parses a conditional action
-     *
+     * <p>
      * Format: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
      *
      * @param actionString the full conditional action string
@@ -241,22 +225,17 @@ public class MenuLoader {
     @Nullable
     private Action parseConditionalAction(@NotNull String actionString) {
         try {
-            // Remove [IF] prefix
             String remaining = actionString.substring(4).trim();
 
-            // Find [THEN]
             int thenIndex = remaining.indexOf("[THEN]");
             if (thenIndex == -1) return null;
 
-            // Extract condition
             String conditionStr = remaining.substring(0, thenIndex).trim();
             Predicate<org.bukkit.entity.Player> condition = ConditionParser.parse(conditionStr);
             if (condition == null) return null;
 
-            // Find [ELSE] (optional)
             int elseIndex = remaining.indexOf("[ELSE]");
 
-            // Extract THEN actions
             String thenPart;
             if (elseIndex != -1) {
                 thenPart = remaining.substring(thenIndex + 6, elseIndex).trim();
@@ -266,29 +245,26 @@ public class MenuLoader {
 
             List<Action> thenActions = parseMultipleActions(thenPart);
 
-            // Extract ELSE actions (if exists)
             List<Action> elseActions = new ArrayList<>();
             if (elseIndex != -1) {
                 String elsePart = remaining.substring(elseIndex + 6).trim();
                 elseActions = parseMultipleActions(elsePart);
             }
 
-            // Build conditional action
             return ConditionalAction.builder()
                     .condition(condition)
                     .then(thenActions.toArray(new Action[0]))
                     .otherwise(elseActions.toArray(new Action[0]))
                     .build();
 
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception exception) {
             return null;
         }
     }
 
     /**
      * Parses multiple actions from a string
-     *
+     * <p>
      * Example: "[OPEN] main.yml [SOUND] UI_BUTTON_CLICK"
      *
      * @param actionsString the actions string
@@ -298,7 +274,6 @@ public class MenuLoader {
     private List<Action> parseMultipleActions(@NotNull String actionsString) {
         List<Action> actions = new ArrayList<>();
 
-        // Split by [ but keep the brackets
         String[] parts = actionsString.split("(?=\\[)");
 
         for (String part : parts) {

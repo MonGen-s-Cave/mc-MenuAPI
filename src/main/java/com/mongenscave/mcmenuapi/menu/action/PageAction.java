@@ -27,7 +27,7 @@ public class PageAction implements Action {
         Menu menu = McMenuAPI.getInstance().getOpenMenu(player);
 
         if (!(menu instanceof PaginatedMenu paginatedMenu)) {
-            return; // Not a paginated menu
+            return;
         }
 
         int currentPage = paginatedMenu.getCurrentPage(player);
@@ -42,7 +42,6 @@ public class PageAction implements Action {
     private int calculateNewPage(int currentPage, int totalPages) {
         String change = pageChange.trim();
 
-        // Relative changes
         if (change.startsWith("+")) {
             int delta = Integer.parseInt(change.substring(1));
             return currentPage + delta;
@@ -50,7 +49,6 @@ public class PageAction implements Action {
             int delta = Integer.parseInt(change.substring(1));
             return currentPage - delta;
         } else {
-            // Absolute page
             return Integer.parseInt(change);
         }
     }

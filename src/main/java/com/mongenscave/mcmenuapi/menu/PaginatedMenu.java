@@ -12,7 +12,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  * Advanced paginated menu implementation with automatic pagination
@@ -65,7 +64,6 @@ public class PaginatedMenu implements Menu {
     private Inventory createInventory(@NotNull Player player, int page) {
         Inventory inventory = Bukkit.createInventory(null, size, title);
 
-        // Place static items
         staticItems.values().stream()
                 .sorted(Comparator.comparingInt(MenuItem::getPriority))
                 .forEach(menuItem -> {
@@ -77,7 +75,6 @@ public class PaginatedMenu implements Menu {
                     }
                 });
 
-        // Place page items
         int start = page * itemsPerPage;
         int end = Math.min(start + itemsPerPage, pageItems.size());
 
@@ -91,7 +88,6 @@ public class PaginatedMenu implements Menu {
             }
         }
 
-        // Place navigation buttons
         if (previousPageItem != null && page > 0) {
             MenuItem replaced = previousPageItem.withReplacedPlaceholders(player, globalPlaceholders);
             for (int slot : replaced.getSlots()) {
@@ -250,7 +246,6 @@ public class PaginatedMenu implements Menu {
      */
     @Nullable
     public MenuItem getItemAtSlot(int slot, @NotNull Player player) {
-        // Check static items first
         MenuItem staticItem = staticItems.values().stream()
                 .filter(item -> item.getSlots().contains(slot))
                 .findFirst()
@@ -260,7 +255,6 @@ public class PaginatedMenu implements Menu {
             return staticItem;
         }
 
-        // Check page items
         int page = getCurrentPage(player);
         int slotIndex = -1;
 
@@ -278,7 +272,6 @@ public class PaginatedMenu implements Menu {
             }
         }
 
-        // Check navigation buttons
         if (previousPageItem != null && previousPageItem.getSlots().contains(slot)) {
             return previousPageItem;
         }

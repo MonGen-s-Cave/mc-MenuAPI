@@ -1,14 +1,24 @@
 plugins {
     id("java")
     id("com.gradleup.shadow") version("8.3.2")
-    id("io.github.revxrsal.zapper") version("1.0.2")
     id("io.freefair.lombok") version("8.11")
+    id("maven-publish")
 }
 
 group = "com.mongenscave"
 version = "1.0.0"
 
 repositories {
+    maven {
+        name = "MonGens-Cave"
+        url = uri("https://repo.mongenscave.com/")
+        credentials {
+            username = project.findProperty("mongensUsername") as String
+            password = project.findProperty("mongensPassword") as String
+        }
+    }
+
+
     mavenCentral()
 
     maven("https://repo.papermc.io/repository/maven-public/")
@@ -27,8 +37,6 @@ dependencies {
     compileOnly("dev.lone:api-itemsadder:4.0.10")
 
     implementation("dev.dejvokep:boosted-yaml:1.3.6")
-
-    zap("com.github.Anon8281:UniversalScheduler:0.1.6")
 }
 
 java {
@@ -37,15 +45,46 @@ java {
     }
 }
 
-tasks.withType<JavaCompile> {
-    options.compilerArgs.add("-parameters")
+tasks.javadoc {
+    options.encoding = "UTF-8"
+    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
 }
 
-zapper {
-    libsFolder = "libs"
-    relocationPrefix = "com.mongenscave.mcbox"
+val apiJar = tasks.register<Jar>("apiJar") {
+    archiveBaseName.set("mc-MenuAPI")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
 
-    repositories { includeProjectRepositories() }
+    from(sourceSets.main.get().output) {
+        include("com/mongenscave/mcmenuapi/**")
+    }
+}
 
-    relocate("com.github.Anon8281.universalScheduler", "universalScheduler")
+publishing {
+    publications {
+        create<MavenPublication>("apiJar") {
+            artifact(apiJar.get()) {
+                classifier = null
+            }
+
+            groupId = "com.mongenscave"
+            artifactId = "mc-MenuAPI"
+            version = project.version.toString()
+        }
+    }
+
+    repositories {
+        maven {
+            name = "MonGens-Cave"
+            url = uri("https://repo.mongenscave.com/releases")
+            credentials {
+                username = project.findProperty("mongensUsername") as String
+                password = project.findProperty("mongensPassword") as String
+            }
+        }
+    }
+}
+
+tasks.register("deployApi") {
+    dependsOn("apiJar", "publishApiJarPublicationToMonGens-CaveRepository")
 }

@@ -11,7 +11,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -58,7 +57,7 @@ public interface ItemFactory {
                             if (builder != null) {
                                 baseItem = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
                             }
-                        } catch (Exception e) {
+                        } catch (Exception exception) {
                             return Optional.empty();
                         }
                     }
@@ -71,7 +70,7 @@ public interface ItemFactory {
                             if (customStack != null) {
                                 baseItem = (ItemStack) customStackClass.getMethod("getItemStack").invoke(customStack);
                             }
-                        } catch (Exception e) {
+                        } catch (Exception exception) {
                             return Optional.empty();
                         }
                     }
@@ -84,7 +83,7 @@ public interface ItemFactory {
                             if (builder != null) {
                                 baseItem = (ItemStack) builder.getClass().getMethod("build").invoke(builder);
                             }
-                        } catch (Exception e) {
+                        } catch (Exception exception) {
                             return Optional.empty();
                         }
                     }
@@ -101,7 +100,6 @@ public interface ItemFactory {
             return Optional.empty();
         }
 
-        // Apply additional config
         int amount = section.getInt("amount", 1);
         amount = Math.max(1, Math.min(amount, 64));
         baseItem.setAmount(amount);
@@ -127,7 +125,6 @@ public interface ItemFactory {
             }
         }
 
-        // Apply enchantments
         List<String> enchantmentStrings = section.getStringList("enchantments");
         for (String enchantmentString : enchantmentStrings) {
             String[] enchParts = enchantmentString.split(":");
@@ -142,7 +139,6 @@ public interface ItemFactory {
             }
         }
 
-        // Apply unbreakable
         boolean unbreakable = section.getBoolean("unbreakable", false);
         if (unbreakable) {
             baseItem.editMeta(meta -> meta.setUnbreakable(true));
@@ -159,12 +155,10 @@ public interface ItemFactory {
             String materialName = section.getString("material");
             if (materialName == null || materialName.isEmpty()) return Optional.empty();
 
-            // Check if it's a custom item
             if (materialName.contains(":")) {
                 return buildCustomItem(section, materialName);
             }
 
-            // Normal material
             Material material;
             try {
                 material = Material.valueOf(materialName.toUpperCase());
@@ -187,7 +181,6 @@ public interface ItemFactory {
                     .addLore(lore.toArray(new String[0]))
                     .finish();
 
-            // Apply enchantments
             List<String> enchantmentStrings = section.getStringList("enchantments");
             for (String enchantmentString : enchantmentStrings) {
                 String[] parts = enchantmentString.split(":");
@@ -202,13 +195,11 @@ public interface ItemFactory {
                 }
             }
 
-            // Apply unbreakable
             boolean unbreakable = section.getBoolean("unbreakable", false);
             if (unbreakable) {
                 item.editMeta(meta -> meta.setUnbreakable(true));
             }
 
-            // Apply model data
             item.editMeta(meta -> {
                 int modelData = section.getInt("modeldata", 0);
                 if (modelData > 0) meta.setCustomModelData(modelData);
@@ -221,7 +212,6 @@ public interface ItemFactory {
                 }
             });
 
-            // Apply clickable flag
             boolean clickable = section.getBoolean("clickable", true);
             if (!clickable) {
                 item.editMeta(meta -> meta.addItemFlags(ItemFlag.values()));

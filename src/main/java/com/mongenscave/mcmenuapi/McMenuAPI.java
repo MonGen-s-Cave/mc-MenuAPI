@@ -19,10 +19,39 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Main API class for managing menus
+ *
+ * <h2>This is a LIBRARY - not a standalone plugin!</h2>
+ *
+ * <p>Other plugins must initialize this in their onEnable() method.</p>
+ *
+ * <h3>Example usage:</h3>
+ * <pre>{@code
+ * public class MyPlugin extends JavaPlugin {
+ *     private McMenuAPI menuAPI;
+ *
+ *     @Override
+ *     public void onEnable() {
+ *         File menusFolder = new File(getDataFolder(), "menus");
+ *         menuAPI = new McMenuAPI(this, menusFolder);
+ *
+ *         // Now you can use the API
+ *         menuAPI.openMenu(player, "main.yml");
+ *     }
+ * }
+ * }</pre>
+ *
+ * @author coma112
+ * @version 1.0.0
  */
 @Getter
 public class McMenuAPI {
-    @Getter private static McMenuAPI instance;
+
+    /**
+     * Global instance of the API
+     * <p><b>Note:</b> This is set automatically when you create a new McMenuAPI instance</p>
+     */
+    @Getter
+    private static McMenuAPI instance;
 
     private final Plugin plugin;
     private final File menusFolder;
@@ -32,7 +61,16 @@ public class McMenuAPI {
     /**
      * Creates a new MenuAPI instance
      *
-     * @param plugin the plugin using this API
+     * <p><b>IMPORTANT:</b> Call this in your plugin's onEnable() method!</p>
+     *
+     * <p>This will:</p>
+     * <ul>
+     *   <li>Register event listeners</li>
+     *   <li>Create the menus folder if it doesn't exist</li>
+     *   <li>Load all YAML menus from the folder</li>
+     * </ul>
+     *
+     * @param plugin the plugin using this API (usually 'this' from your plugin)
      * @param menusFolder the folder containing menu YAML files
      */
     public McMenuAPI(@NotNull Plugin plugin, @NotNull File menusFolder) {
@@ -45,10 +83,13 @@ public class McMenuAPI {
 
         Bukkit.getPluginManager().registerEvents(new MenuListener(this), plugin);
         loadAllMenus();
+
+        plugin.getLogger().info("McMenuAPI initialized successfully!");
     }
 
     /**
      * Loads all menus from the menus folder
+     * <p>This is called automatically during initialization</p>
      */
     public void loadAllMenus() {
         if (!menusFolder.exists()) {
@@ -64,12 +105,16 @@ public class McMenuAPI {
             SimpleMenu menu = MenuLoader.loadMenu(file);
             if (menu != null) {
                 loadedMenus.put(file.getName(), menu);
+                plugin.getLogger().info("Loaded menu: " + file.getName());
             }
         }
+
+        plugin.getLogger().info("Loaded " + loadedMenus.size() + " menu(s)");
     }
 
     /**
      * Reloads all menus from the menus folder
+     * <p>This will close all currently open menus</p>
      */
     public void reloadMenus() {
         openMenus.forEach((uuid, menu) -> {
@@ -105,6 +150,7 @@ public class McMenuAPI {
         Optional<Menu> menuOpt = getMenu(fileName);
 
         if (menuOpt.isEmpty()) {
+            plugin.getLogger().warning("Menu not found: " + fileName);
             return false;
         }
 
