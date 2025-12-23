@@ -1,0 +1,5 @@
+name: mc-MenuAPI
+version: '1.0.0'
+main: com.mongenscave.mcmenuapi.McMenuAPI
+api-version: '1.21'
+authors: [ coma112 ]

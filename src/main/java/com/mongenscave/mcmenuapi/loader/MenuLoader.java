@@ -3,7 +3,9 @@ package com.mongenscave.mcmenuapi.loader;
 import com.mongenscave.mcmenuapi.item.ItemFactory;
 import com.mongenscave.mcmenuapi.menu.SimpleMenu;
 import com.mongenscave.mcmenuapi.menu.action.Action;
+import com.mongenscave.mcmenuapi.menu.action.ConditionalAction;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
+import com.mongenscave.mcmenuapi.parser.ConditionParser;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import lombok.experimental.UtilityClass;
@@ -14,9 +16,11 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Predicate;
 
 /**
  * Utility class for loading menus from YAML files
+ * NOW WITH CONDITIONAL ACTIONS!
  */
 @UtilityClass
 public class MenuLoader {
@@ -96,7 +100,7 @@ public class MenuLoader {
             return null;
         }
 
-        // Parse actions
+        // Parse actions (NOW WITH CONDITIONALS!)
         List<Action> actions = new ArrayList<>();
         List<String> actionStrings = section.getStringList("actions");
 
@@ -175,11 +179,23 @@ public class MenuLoader {
     /**
      * Parses an action string
      *
-     * @param actionString the action string (e.g., "[COMMAND] say hello")
+     * NOW SUPPORTS:
+     * - Regular actions: [COMMAND] say hello
+     * - Conditional actions: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
+     *
+     * @param actionString the action string
      * @return the parsed action, or null if invalid
      */
     @Nullable
     private Action parseAction(@NotNull String actionString) {
+        actionString = actionString.trim();
+
+        // Check if it's a conditional action
+        if (actionString.startsWith("[IF]")) {
+            return parseConditionalAction(actionString);
+        }
+
+        // Regular action parsing
         if (!actionString.contains("]")) {
             return null;
         }
@@ -209,7 +225,92 @@ public class MenuLoader {
             case "CLOSE" -> Action.close();
             case "OPEN" -> Action.open(value);
             case "BROADCAST" -> Action.broadcast(value);
+            case "PAGE" -> Action.page(value);
             default -> null;
         };
+    }
+
+    /**
+     * Parses a conditional action
+     *
+     * Format: [IF] {page} == 0 [THEN] [OPEN] main.yml [ELSE] [PAGE] -1
+     *
+     * @param actionString the full conditional action string
+     * @return the conditional action
+     */
+    @Nullable
+    private Action parseConditionalAction(@NotNull String actionString) {
+        try {
+            // Remove [IF] prefix
+            String remaining = actionString.substring(4).trim();
+
+            // Find [THEN]
+            int thenIndex = remaining.indexOf("[THEN]");
+            if (thenIndex == -1) return null;
+
+            // Extract condition
+            String conditionStr = remaining.substring(0, thenIndex).trim();
+            Predicate<org.bukkit.entity.Player> condition = ConditionParser.parse(conditionStr);
+            if (condition == null) return null;
+
+            // Find [ELSE] (optional)
+            int elseIndex = remaining.indexOf("[ELSE]");
+
+            // Extract THEN actions
+            String thenPart;
+            if (elseIndex != -1) {
+                thenPart = remaining.substring(thenIndex + 6, elseIndex).trim();
+            } else {
+                thenPart = remaining.substring(thenIndex + 6).trim();
+            }
+
+            List<Action> thenActions = parseMultipleActions(thenPart);
+
+            // Extract ELSE actions (if exists)
+            List<Action> elseActions = new ArrayList<>();
+            if (elseIndex != -1) {
+                String elsePart = remaining.substring(elseIndex + 6).trim();
+                elseActions = parseMultipleActions(elsePart);
+            }
+
+            // Build conditional action
+            return ConditionalAction.builder()
+                    .condition(condition)
+                    .then(thenActions.toArray(new Action[0]))
+                    .otherwise(elseActions.toArray(new Action[0]))
+                    .build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Parses multiple actions from a string
+     *
+     * Example: "[OPEN] main.yml [SOUND] UI_BUTTON_CLICK"
+     *
+     * @param actionsString the actions string
+     * @return list of parsed actions
+     */
+    @NotNull
+    private List<Action> parseMultipleActions(@NotNull String actionsString) {
+        List<Action> actions = new ArrayList<>();
+
+        // Split by [ but keep the brackets
+        String[] parts = actionsString.split("(?=\\[)");
+
+        for (String part : parts) {
+            part = part.trim();
+            if (part.isEmpty()) continue;
+
+            Action action = parseAction(part);
+            if (action != null) {
+                actions.add(action);
+            }
+        }
+
+        return actions;
     }
 }

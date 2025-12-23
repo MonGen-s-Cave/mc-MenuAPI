@@ -106,4 +106,14 @@ public interface Action {
     static Action broadcast(@NotNull String message) {
         return new BroadcastAction(message);
     }
+
+    /**
+     * Creates a page change action for paginated menus
+     *
+     * @param pageChange the page change (e.g., "+1", "-1", "0", "5")
+     * @return the action
+     */
+    static Action page(@NotNull String pageChange) {
+        return new PageAction(pageChange);
+    }
 }

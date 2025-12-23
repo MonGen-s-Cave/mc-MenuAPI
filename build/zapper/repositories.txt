@@ -1,0 +1,7 @@
+https://repo.maven.apache.org/maven2/
+https://repo.papermc.io/repository/maven-public/
+https://oss.sonatype.org/content/groups/public/
+https://jitpack.io
+https://repo.nexomc.com/releases
+https://repo.oraxen.com/releases
+https://maven.devs.beer/
