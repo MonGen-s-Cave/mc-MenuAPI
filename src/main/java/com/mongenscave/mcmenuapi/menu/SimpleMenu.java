@@ -1,7 +1,11 @@
 package com.mongenscave.mcmenuapi.menu;
 
+import com.mongenscave.mcmenuapi.builder.BuildContextImpl;
+import com.mongenscave.mcmenuapi.builder.DynamicMenuBuilder;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import com.mongenscave.mcmenuapi.processor.ColorProcessor;
+import com.mongenscave.mcmenuapi.registry.DynamicClickRegistry;
+import com.mongenscave.mcmenuapi.registry.DynamicMenuRegistry;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -156,6 +160,41 @@ public class SimpleMenu implements Menu {
         this.paginated = true;
         this.totalPages = Math.max(1, totalPages);
         return this;
+    }
+
+    /**
+     * Internal method for opening with a file name reference
+     * Used by McMenuAPI to trigger dynamic builders
+     */
+    public void openWithFileName(@NotNull Player player, @NotNull String fileName) {
+        DynamicMenuBuilder builder = DynamicMenuRegistry.getBuilder(fileName);
+
+        if (builder != null) {
+            DynamicClickRegistry.clearMenu(fileName);
+
+            Inventory inventory = Bukkit.createInventory(null, size, title);
+
+            items.values().stream()
+                    .sorted(Comparator.comparingInt(MenuItem::getPriority))
+                    .forEach(menuItem -> {
+                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+                        for (int slot : replaced.getSlots()) {
+                            if (slot >= 0 && slot < size) {
+                                inventory.setItem(slot, replaced.getItemStack().clone());
+                            }
+                        }
+                    });
+
+            BuildContextImpl context = new BuildContextImpl(player, inventory, fileName);
+
+            builder.build(context);
+
+            openInventories.put(player.getUniqueId(), inventory);
+            player.openInventory(inventory);
+            openHandlers.forEach(handler -> handler.accept(player));
+        } else {
+            open(player);
+        }
     }
 
     /**

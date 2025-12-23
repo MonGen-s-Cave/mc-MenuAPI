@@ -83,8 +83,6 @@ public class McMenuAPI {
 
         Bukkit.getPluginManager().registerEvents(new MenuListener(this), plugin);
         loadAllMenus();
-
-        plugin.getLogger().info("McMenuAPI initialized successfully!");
     }
 
     /**
@@ -105,11 +103,8 @@ public class McMenuAPI {
             SimpleMenu menu = MenuLoader.loadMenu(file);
             if (menu != null) {
                 loadedMenus.put(file.getName(), menu);
-                plugin.getLogger().info("Loaded menu: " + file.getName());
             }
         }
-
-        plugin.getLogger().info("Loaded " + loadedMenus.size() + " menu(s)");
     }
 
     /**
@@ -141,6 +136,7 @@ public class McMenuAPI {
 
     /**
      * Opens a menu for a player
+     * If a dynamic builder is registered for this menu, it will be used
      *
      * @param player the player
      * @param fileName the menu file name
@@ -156,7 +152,12 @@ public class McMenuAPI {
 
         Menu menu = menuOpt.get();
         openMenus.put(player.getUniqueId(), menu);
-        menu.open(player);
+
+        if (menu instanceof SimpleMenu simpleMenu) {
+            simpleMenu.openWithFileName(player, fileName);
+        } else {
+            menu.open(player);
+        }
 
         return true;
     }
