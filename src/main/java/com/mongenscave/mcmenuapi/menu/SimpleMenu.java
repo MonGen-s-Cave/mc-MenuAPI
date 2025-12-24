@@ -2,6 +2,7 @@ package com.mongenscave.mcmenuapi.menu;
 
 import com.mongenscave.mcmenuapi.builder.BuildContextImpl;
 import com.mongenscave.mcmenuapi.builder.DynamicMenuBuilder;
+import com.mongenscave.mcmenuapi.context.AutoPlaceholderRegistry;
 import com.mongenscave.mcmenuapi.context.ContextPlaceholderRegistry;
 import com.mongenscave.mcmenuapi.context.MenuContext;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
@@ -136,19 +137,24 @@ public class SimpleMenu implements Menu {
 
     /**
      * Builds the complete placeholder map for a player
+     * NOW WITH AUTO-DETECTION!
      */
     @NotNull
     private Map<String, String> buildPlaceholders(@NotNull Player player) {
         Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
 
-        // Add menu-specific placeholders
         String menuFileName = getMenuFileNameForPlayer(player);
         if (menuFileName != null) {
             Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
             allPlaceholders.putAll(dynamicPlaceholders);
         }
 
-        // Add context placeholders
+        Object context = MenuContext.getRaw(player);
+        if (context != null) {
+            Map<String, String> autoPlaceholders = AutoPlaceholderRegistry.resolveAll(player, context);
+            allPlaceholders.putAll(autoPlaceholders);
+        }
+
         if (MenuContext.has(player)) {
             Map<String, String> contextPlaceholders = ContextPlaceholderRegistry.resolveAll(player);
             allPlaceholders.putAll(contextPlaceholders);
