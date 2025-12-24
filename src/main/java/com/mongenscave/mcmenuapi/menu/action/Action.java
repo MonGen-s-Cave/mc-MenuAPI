@@ -137,4 +137,15 @@ public interface Action {
     static Action page(@NotNull String pageChange) {
         return new PageAction(pageChange);
     }
+
+    /**
+     * Creates a refresh action that refreshes the current menu
+     *
+     * @return the action
+     */
+    @NotNull
+    @Contract(value = " -> new", pure = true)
+    static Action refresh() {
+        return new RefreshAction();
+    }
 }

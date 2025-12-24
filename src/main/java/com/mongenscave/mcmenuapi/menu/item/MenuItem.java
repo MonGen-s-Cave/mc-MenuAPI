@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Represents a clickable item in a menu
@@ -71,6 +72,75 @@ public class MenuItem {
     @Singular("dynamicPlaceholder")
     @NotNull
     private final Map<String, Function<Player, String>> dynamicPlaceholders;
+
+    /**
+     * Visibility condition string from YAML (e.g., "{context.autoSellEnabled} == true")
+     */
+    @Nullable
+    private final String visibilityCondition;
+
+    /**
+     * Programmatic visibility predicate
+     */
+    @Nullable
+    private final Predicate<Player> visibilityPredicate;
+
+    /**
+     * Checks if this item should be visible for a player
+     *
+     * @param player the player
+     * @param placeholders the resolved placeholders
+     * @return true if visible
+     */
+    public boolean isVisible(@NotNull Player player, @NotNull Map<String, String> placeholders) {
+        // Check programmatic predicate first
+        if (visibilityPredicate != null) {
+            return visibilityPredicate.test(player);
+        }
+
+        // Check YAML condition
+        if (visibilityCondition == null || visibilityCondition.isEmpty()) {
+            return true;
+        }
+
+        return evaluateVisibilityCondition(visibilityCondition, placeholders);
+    }
+
+    /**
+     * Evaluates a visibility condition string
+     */
+    private boolean evaluateVisibilityCondition(@NotNull String condition, @NotNull Map<String, String> placeholders) {
+        String evaluated = condition;
+
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            evaluated = evaluated.replace(entry.getKey(), entry.getValue());
+        }
+
+        evaluated = evaluated.trim();
+
+        if (evaluated.equalsIgnoreCase("true")) {
+            return true;
+        }
+        if (evaluated.equalsIgnoreCase("false")) {
+            return false;
+        }
+
+        if (evaluated.contains("==")) {
+            String[] parts = evaluated.split("==", 2);
+            if (parts.length == 2) {
+                return parts[0].trim().equalsIgnoreCase(parts[1].trim());
+            }
+        }
+
+        if (evaluated.contains("!=")) {
+            String[] parts = evaluated.split("!=", 2);
+            if (parts.length == 2) {
+                return !parts[0].trim().equalsIgnoreCase(parts[1].trim());
+            }
+        }
+
+        return true;
+    }
 
     /**
      * Creates a copy of this menu item with placeholders replaced

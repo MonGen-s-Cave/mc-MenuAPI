@@ -1,7 +1,10 @@
 package com.mongenscave.mcmenuapi.menu;
 
+import com.mongenscave.mcmenuapi.context.ContextPlaceholderRegistry;
+import com.mongenscave.mcmenuapi.context.MenuContext;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import com.mongenscave.mcmenuapi.processor.ColorProcessor;
+import com.mongenscave.mcmenuapi.refresh.RefreshConfig;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -28,12 +31,19 @@ public class PaginatedMenu implements Menu {
     private final Map<UUID, Integer> playerPages;
     private final List<Consumer<Player>> closeHandlers;
     private final List<Consumer<Player>> openHandlers;
+    private final List<Consumer<Player>> refreshHandlers;
 
     private final int[] pageSlots;
     private final int itemsPerPage;
 
     private MenuItem previousPageItem;
     private MenuItem nextPageItem;
+
+    // New fields for enhanced features
+    private RefreshConfig refreshConfig;
+    private boolean playerInventoryInteractionEnabled;
+    private String playerInventoryHandlerName;
+    private boolean contextAware;
 
     public PaginatedMenu(@NotNull String title, int size, @NotNull int[] pageSlots) {
         this.title = ColorProcessor.process(title);
@@ -47,6 +57,13 @@ public class PaginatedMenu implements Menu {
         this.playerPages = new ConcurrentHashMap<>();
         this.closeHandlers = Collections.synchronizedList(new ArrayList<>());
         this.openHandlers = Collections.synchronizedList(new ArrayList<>());
+        this.refreshHandlers = Collections.synchronizedList(new ArrayList<>());
+
+        // Initialize new fields
+        this.refreshConfig = RefreshConfig.DISABLED;
+        this.playerInventoryInteractionEnabled = false;
+        this.playerInventoryHandlerName = null;
+        this.contextAware = false;
     }
 
     @Override
@@ -62,12 +79,17 @@ public class PaginatedMenu implements Menu {
 
     @NotNull
     private Inventory createInventory(@NotNull Player player, int page) {
-        Inventory inventory = Bukkit.createInventory(null, size, title);
+        Map<String, String> allPlaceholders = buildPlaceholders(player);
 
+        String processedTitle = applyPlaceholders(title, allPlaceholders);
+
+        Inventory inventory = Bukkit.createInventory(null, size, processedTitle);
+
+        // Place static items
         staticItems.values().stream()
                 .sorted(Comparator.comparingInt(MenuItem::getPriority))
                 .forEach(menuItem -> {
-                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
                     for (int slot : replaced.getSlots()) {
                         if (slot >= 0 && slot < size) {
                             inventory.setItem(slot, replaced.getItemStack().clone());
@@ -75,12 +97,13 @@ public class PaginatedMenu implements Menu {
                     }
                 });
 
+        // Place paginated items
         int start = page * itemsPerPage;
         int end = Math.min(start + itemsPerPage, pageItems.size());
 
         for (int i = start; i < end; i++) {
             MenuItem menuItem = pageItems.get(i);
-            MenuItem replaced = menuItem.withReplacedPlaceholders(player, globalPlaceholders);
+            MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
             int slotIndex = i - start;
 
             if (slotIndex < pageSlots.length) {
@@ -88,21 +111,55 @@ public class PaginatedMenu implements Menu {
             }
         }
 
+        // Place navigation items
         if (previousPageItem != null && page > 0) {
-            MenuItem replaced = previousPageItem.withReplacedPlaceholders(player, globalPlaceholders);
+            MenuItem replaced = previousPageItem.withReplacedPlaceholders(player, allPlaceholders);
             for (int slot : replaced.getSlots()) {
                 inventory.setItem(slot, replaced.getItemStack().clone());
             }
         }
 
         if (nextPageItem != null && (page + 1) < getTotalPages()) {
-            MenuItem replaced = nextPageItem.withReplacedPlaceholders(player, globalPlaceholders);
+            MenuItem replaced = nextPageItem.withReplacedPlaceholders(player, allPlaceholders);
             for (int slot : replaced.getSlots()) {
                 inventory.setItem(slot, replaced.getItemStack().clone());
             }
         }
 
         return inventory;
+    }
+
+    /**
+     * Builds the complete placeholder map for a player
+     */
+    @NotNull
+    private Map<String, String> buildPlaceholders(@NotNull Player player) {
+        Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
+
+        // Add context placeholders
+        if (MenuContext.has(player)) {
+            Map<String, String> contextPlaceholders = ContextPlaceholderRegistry.resolveAll(player);
+            allPlaceholders.putAll(contextPlaceholders);
+        }
+
+        // Add page placeholders
+        int currentPage = playerPages.getOrDefault(player.getUniqueId(), 0);
+        allPlaceholders.put("{page}", String.valueOf(currentPage + 1));
+        allPlaceholders.put("{total_pages}", String.valueOf(getTotalPages()));
+
+        return allPlaceholders;
+    }
+
+    /**
+     * Applies placeholders to a string
+     */
+    @NotNull
+    private String applyPlaceholders(@NotNull String text, @NotNull Map<String, String> placeholders) {
+        String result = text;
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 
     @Override
@@ -121,6 +178,14 @@ public class PaginatedMenu implements Menu {
 
         openInventories.put(player.getUniqueId(), newInventory);
         player.openInventory(newInventory);
+
+        refreshHandlers.forEach(handler -> handler.accept(player));
+    }
+
+    @Override
+    public void refreshSlots(@NotNull Player player, @NotNull List<Integer> slots) {
+        // For paginated menu, just do a full refresh (items might have moved)
+        refresh(player);
     }
 
     @Override
@@ -186,7 +251,7 @@ public class PaginatedMenu implements Menu {
 
     @Override
     public int getTotalPages() {
-        return (int) Math.ceil((double) pageItems.size() / itemsPerPage);
+        return Math.max(1, (int) Math.ceil((double) pageItems.size() / itemsPerPage));
     }
 
     @Override
@@ -200,6 +265,63 @@ public class PaginatedMenu implements Menu {
         openHandlers.add(handler);
         return this;
     }
+
+    @Override
+    public @NotNull Menu onRefresh(@NotNull Consumer<Player> handler) {
+        refreshHandlers.add(handler);
+        return this;
+    }
+
+    // ==================== NEW METHODS ====================
+
+    @Override
+    public @NotNull RefreshConfig getRefreshConfig() {
+        return refreshConfig;
+    }
+
+    @Override
+    public @NotNull Menu setRefreshConfig(@NotNull RefreshConfig config) {
+        this.refreshConfig = config;
+        return this;
+    }
+
+    @Override
+    public boolean isPlayerInventoryInteractionEnabled() {
+        return playerInventoryInteractionEnabled;
+    }
+
+    @Override
+    public @NotNull Menu setPlayerInventoryInteraction(boolean enabled) {
+        this.playerInventoryInteractionEnabled = enabled;
+        return this;
+    }
+
+    @Override
+    public @Nullable String getPlayerInventoryHandlerName() {
+        return playerInventoryHandlerName;
+    }
+
+    @Override
+    public @NotNull Menu setPlayerInventoryHandlerName(@Nullable String handlerName) {
+        this.playerInventoryHandlerName = handlerName;
+        if (handlerName != null) {
+            this.playerInventoryInteractionEnabled = true;
+        }
+        return this;
+    }
+
+    @Override
+    public boolean isContextAware() {
+        return contextAware;
+    }
+
+    @Override
+    public @NotNull Menu setContextAware(boolean contextAware) {
+        this.contextAware = contextAware;
+        return this;
+    }
+
+    // ==================== PAGINATION METHODS ====================
 
     /**
      * Adds a page item

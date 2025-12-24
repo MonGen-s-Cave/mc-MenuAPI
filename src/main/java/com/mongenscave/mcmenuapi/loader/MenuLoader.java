@@ -6,6 +6,7 @@ import com.mongenscave.mcmenuapi.menu.action.Action;
 import com.mongenscave.mcmenuapi.menu.action.ConditionalAction;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import com.mongenscave.mcmenuapi.parser.ConditionParser;
+import com.mongenscave.mcmenuapi.refresh.RefreshConfig;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import lombok.experimental.UtilityClass;
@@ -42,6 +43,7 @@ public class MenuLoader {
                 menu.setPlaceableSlots(placeableSlots);
             }
 
+            // Load items
             Section itemsSection = document.getSection("items");
             if (itemsSection != null) {
                 for (String key : itemsSection.getRoutesAsStrings(false)) {
@@ -55,10 +57,42 @@ public class MenuLoader {
                 }
             }
 
+            // Load pagination
             if (document.contains("pagination.enabled") && document.getBoolean("pagination.enabled")) {
                 int pages = document.getInt("pagination.pages", 1);
                 menu.setPaginated(pages);
             }
+
+            // ==================== NEW: Load auto-refresh config ====================
+            Section refreshSection = document.getSection("auto-refresh");
+            if (refreshSection != null && refreshSection.getBoolean("enabled", false)) {
+                int intervalTicks = refreshSection.getInt("interval", 20);
+                List<Integer> slots = parseSlotsList(refreshSection.get("slots"));
+
+                RefreshConfig refreshConfig;
+                if (slots.isEmpty()) {
+                    refreshConfig = RefreshConfig.all(intervalTicks);
+                } else {
+                    refreshConfig = RefreshConfig.slots(intervalTicks, slots);
+                }
+                menu.setRefreshConfig(refreshConfig);
+            }
+
+            // ==================== NEW: Load player inventory config ====================
+            Section playerInvSection = document.getSection("player-inventory");
+            if (playerInvSection != null) {
+                boolean enabled = playerInvSection.getBoolean("enabled", false);
+                menu.setPlayerInventoryInteraction(enabled);
+
+                String handler = playerInvSection.getString("handler", null);
+                if (handler != null && !handler.isEmpty()) {
+                    menu.setPlayerInventoryHandlerName(handler);
+                }
+            }
+
+            // ==================== NEW: Load context-aware flag ====================
+            boolean contextAware = document.getBoolean("context-aware", false);
+            menu.setContextAware(contextAware);
 
             return menu;
         } catch (IOException exception) {
@@ -96,6 +130,9 @@ public class MenuLoader {
         int priority = section.getInt("priority", 0);
         boolean clickable = section.getBoolean("clickable", true);
 
+        // Load visibility condition
+        String visibleIf = section.getString("visible-if", null);
+
         Map<String, String> metadata = new HashMap<>();
         Section metadataSection = section.getSection("metadata");
         if (metadataSection != null) {
@@ -111,52 +148,102 @@ public class MenuLoader {
                 .priority(priority)
                 .clickable(clickable);
 
+        // Add visibility condition if present
+        if (visibleIf != null && !visibleIf.isEmpty()) {
+            builder.visibilityCondition(visibleIf);
+        }
+
         metadata.forEach(builder::placeholder);
 
         return builder.build();
     }
 
+    /**
+     * Parses slots from various config formats
+     */
     @NotNull
     private List<Integer> parseSlots(@Nullable Object slotConfig) {
-        switch (slotConfig) {
-            case null -> {
-                return Collections.emptyList();
+        if (slotConfig == null) {
+            return Collections.emptyList();
+        }
+
+        if (slotConfig instanceof Integer integer) {
+            return List.of(integer);
+        }
+
+        if (slotConfig instanceof String slotStr) {
+            return parseSlotString(slotStr);
+        }
+
+        if (slotConfig instanceof List<?> list) {
+            List<Integer> slots = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Integer i) {
+                    slots.add(i);
+                } else if (item instanceof String s) {
+                    slots.addAll(parseSlotString(s));
+                }
             }
-            case Integer integer -> {
-                return List.of(integer);
-            }
-            case String slotStr -> {
-                List<Integer> slots = new ArrayList<>();
+            return slots;
+        }
 
-                String[] parts = slotStr.split(",");
-                for (String part : parts) {
-                    part = part.trim();
+        return Collections.emptyList();
+    }
 
-                    if (part.contains("-")) {
-                        String[] range = part.split("-");
-                        if (range.length == 2) {
-                            try {
-                                int start = Integer.parseInt(range[0].trim());
-                                int end = Integer.parseInt(range[1].trim());
+    /**
+     * Parses a slot string with ranges and special keywords
+     */
+    @NotNull
+    private List<Integer> parseSlotString(@NotNull String slotStr) {
+        List<Integer> slots = new ArrayList<>();
 
-                                for (int i = Math.min(start, end); i <= Math.max(start, end); i++) {
-                                    slots.add(i);
-                                }
-                            } catch (NumberFormatException ignored) {
-                            }
+        String[] parts = slotStr.split(",");
+        for (String part : parts) {
+            part = part.trim();
+
+            if (part.contains("-")) {
+                String[] range = part.split("-");
+                if (range.length == 2) {
+                    try {
+                        int start = Integer.parseInt(range[0].trim());
+                        int end = Integer.parseInt(range[1].trim());
+
+                        for (int i = Math.min(start, end); i <= Math.max(start, end); i++) {
+                            slots.add(i);
                         }
-                    } else {
-                        try {
-                            slots.add(Integer.parseInt(part));
-                        } catch (NumberFormatException ignored) {
-                        }
+                    } catch (NumberFormatException ignored) {
                     }
                 }
+            } else {
+                try {
+                    slots.add(Integer.parseInt(part));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
 
-                return slots;
+        return slots;
+    }
+
+    /**
+     * Parses slots list from config
+     */
+    @NotNull
+    private List<Integer> parseSlotsList(@Nullable Object config) {
+        if (config == null) {
+            return Collections.emptyList();
+        }
+
+        if (config instanceof List<?> list) {
+            List<Integer> slots = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Integer i) {
+                    slots.add(i);
+                } else if (item instanceof Number n) {
+                    slots.add(n.intValue());
+                }
             }
-            default -> {
-            }
+            return slots;
         }
 
         return Collections.emptyList();
@@ -200,7 +287,8 @@ public class MenuLoader {
             case "OPEN" -> Action.open(value);
             case "BROADCAST" -> Action.broadcast(value);
             case "PAGE" -> Action.page(value);
-            case "ACTION" -> new CustomAction(value);
+            case "ACTION" -> new ContextAction(value);
+            case "REFRESH" -> Action.refresh();
             default -> null;
         };
     }
@@ -264,6 +352,30 @@ public class MenuLoader {
         return actions;
     }
 
+    /**
+     * Custom action that triggers registered context action handlers
+     */
+    public static class ContextAction implements Action {
+        private final String actionName;
+
+        public ContextAction(@NotNull String actionName) {
+            this.actionName = actionName.toUpperCase();
+        }
+
+        @Override
+        public void execute(@NotNull org.bukkit.entity.Player player) {
+            // This is handled by the MenuListener using ContextActionRegistry
+        }
+
+        @NotNull
+        public String getActionName() {
+            return actionName;
+        }
+    }
+
+    /**
+     * Legacy custom action for backwards compatibility
+     */
     public static class CustomAction implements Action {
         private final String actionName;
 
@@ -272,7 +384,8 @@ public class MenuLoader {
         }
 
         @Override
-        public void execute(@NotNull org.bukkit.entity.Player player) {}
+        public void execute(@NotNull org.bukkit.entity.Player player) {
+        }
 
         @NotNull
         public String getActionName() {

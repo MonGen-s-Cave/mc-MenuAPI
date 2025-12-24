@@ -2,8 +2,11 @@ package com.mongenscave.mcmenuapi.menu;
 
 import com.mongenscave.mcmenuapi.builder.BuildContextImpl;
 import com.mongenscave.mcmenuapi.builder.DynamicMenuBuilder;
+import com.mongenscave.mcmenuapi.context.ContextPlaceholderRegistry;
+import com.mongenscave.mcmenuapi.context.MenuContext;
 import com.mongenscave.mcmenuapi.menu.item.MenuItem;
 import com.mongenscave.mcmenuapi.processor.ColorProcessor;
+import com.mongenscave.mcmenuapi.refresh.RefreshConfig;
 import com.mongenscave.mcmenuapi.registry.DynamicClickRegistry;
 import com.mongenscave.mcmenuapi.registry.DynamicMenuRegistry;
 import com.mongenscave.mcmenuapi.registry.PlaceholderRegistry;
@@ -28,10 +31,17 @@ public class SimpleMenu implements Menu {
     private final Map<UUID, Integer> playerPages;
     private final List<Consumer<Player>> closeHandlers;
     private final List<Consumer<Player>> openHandlers;
+    private final List<Consumer<Player>> refreshHandlers;
     private List<Integer> placeableSlots;
 
     private boolean paginated;
     private int totalPages;
+
+    // New fields for enhanced features
+    private RefreshConfig refreshConfig;
+    private boolean playerInventoryInteractionEnabled;
+    private String playerInventoryHandlerName;
+    private boolean contextAware;
 
     public SimpleMenu(@NotNull String title, int size) {
         this.title = ColorProcessor.process(title);
@@ -42,9 +52,16 @@ public class SimpleMenu implements Menu {
         this.playerPages = new ConcurrentHashMap<>();
         this.closeHandlers = Collections.synchronizedList(new ArrayList<>());
         this.openHandlers = Collections.synchronizedList(new ArrayList<>());
+        this.refreshHandlers = Collections.synchronizedList(new ArrayList<>());
         this.placeableSlots = new ArrayList<>();
         this.paginated = false;
         this.totalPages = 1;
+
+        // Initialize new fields
+        this.refreshConfig = RefreshConfig.DISABLED;
+        this.playerInventoryInteractionEnabled = false;
+        this.playerInventoryHandlerName = null;
+        this.contextAware = false;
     }
 
     public void setPlaceableSlots(@NotNull List<Integer> slots) {
@@ -57,31 +74,13 @@ public class SimpleMenu implements Menu {
 
     @Override
     public void open(@NotNull Player player) {
-        Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
-        String menuFileName = getMenuFileNameForPlayer(player);
+        Map<String, String> allPlaceholders = buildPlaceholders(player);
 
-        if (menuFileName != null) {
-            Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
-            allPlaceholders.putAll(dynamicPlaceholders);
-        }
-
-        String processedTitle = title;
-        for (Map.Entry<String, String> entry : allPlaceholders.entrySet()) {
-            processedTitle = processedTitle.replace(entry.getKey(), entry.getValue());
-        }
+        String processedTitle = applyPlaceholders(title, allPlaceholders);
 
         Inventory inventory = Bukkit.createInventory(null, size, ColorProcessor.process(processedTitle));
 
-        items.values().stream()
-                .sorted(Comparator.comparingInt(MenuItem::getPriority))
-                .forEach(menuItem -> {
-                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
-                    for (int slot : replaced.getSlots()) {
-                        if (slot >= 0 && slot < size) {
-                            inventory.setItem(slot, replaced.getItemStack().clone());
-                        }
-                    }
-                });
+        populateInventory(inventory, player, allPlaceholders);
 
         openInventories.put(player.getUniqueId(), inventory);
         player.openInventory(inventory);
@@ -104,24 +103,86 @@ public class SimpleMenu implements Menu {
             Inventory inventory = openInventories.get(player.getUniqueId());
             inventory.clear();
 
-            Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
-            String menuFileName = getMenuFileNameForPlayer(player);
-            if (menuFileName != null) {
-                Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
-                allPlaceholders.putAll(dynamicPlaceholders);
-            }
+            Map<String, String> allPlaceholders = buildPlaceholders(player);
 
+            populateInventory(inventory, player, allPlaceholders);
+
+            refreshHandlers.forEach(handler -> handler.accept(player));
+        }
+    }
+
+    @Override
+    public void refreshSlots(@NotNull Player player, @NotNull List<Integer> slots) {
+        if (openInventories.containsKey(player.getUniqueId())) {
+            Inventory inventory = openInventories.get(player.getUniqueId());
+
+            Map<String, String> allPlaceholders = buildPlaceholders(player);
+
+            // Only update items in specified slots
             items.values().stream()
                     .sorted(Comparator.comparingInt(MenuItem::getPriority))
                     .forEach(menuItem -> {
                         MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
                         for (int slot : replaced.getSlots()) {
-                            if (slot >= 0 && slot < size) {
+                            if (slot >= 0 && slot < size && slots.contains(slot)) {
                                 inventory.setItem(slot, replaced.getItemStack().clone());
                             }
                         }
                     });
+
+            refreshHandlers.forEach(handler -> handler.accept(player));
         }
+    }
+
+    /**
+     * Builds the complete placeholder map for a player
+     */
+    @NotNull
+    private Map<String, String> buildPlaceholders(@NotNull Player player) {
+        Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
+
+        // Add menu-specific placeholders
+        String menuFileName = getMenuFileNameForPlayer(player);
+        if (menuFileName != null) {
+            Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, menuFileName);
+            allPlaceholders.putAll(dynamicPlaceholders);
+        }
+
+        // Add context placeholders
+        if (MenuContext.has(player)) {
+            Map<String, String> contextPlaceholders = ContextPlaceholderRegistry.resolveAll(player);
+            allPlaceholders.putAll(contextPlaceholders);
+        }
+
+        return allPlaceholders;
+    }
+
+    /**
+     * Applies placeholders to a string
+     */
+    @NotNull
+    private String applyPlaceholders(@NotNull String text, @NotNull Map<String, String> placeholders) {
+        String result = text;
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Populates the inventory with items
+     */
+    private void populateInventory(@NotNull Inventory inventory, @NotNull Player player, @NotNull Map<String, String> placeholders) {
+        items.values().stream()
+                .sorted(Comparator.comparingInt(MenuItem::getPriority))
+                .forEach(menuItem -> {
+                    MenuItem replaced = menuItem.withReplacedPlaceholders(player, placeholders);
+                    for (int slot : replaced.getSlots()) {
+                        if (slot >= 0 && slot < size) {
+                            inventory.setItem(slot, replaced.getItemStack().clone());
+                        }
+                    }
+                });
     }
 
     @Override
@@ -192,6 +253,63 @@ public class SimpleMenu implements Menu {
         return this;
     }
 
+    @Override
+    public @NotNull Menu onRefresh(@NotNull Consumer<Player> handler) {
+        refreshHandlers.add(handler);
+        return this;
+    }
+
+    // ==================== NEW METHODS ====================
+
+    @Override
+    public @NotNull RefreshConfig getRefreshConfig() {
+        return refreshConfig;
+    }
+
+    @Override
+    public @NotNull Menu setRefreshConfig(@NotNull RefreshConfig config) {
+        this.refreshConfig = config;
+        return this;
+    }
+
+    @Override
+    public boolean isPlayerInventoryInteractionEnabled() {
+        return playerInventoryInteractionEnabled;
+    }
+
+    @Override
+    public @NotNull Menu setPlayerInventoryInteraction(boolean enabled) {
+        this.playerInventoryInteractionEnabled = enabled;
+        return this;
+    }
+
+    @Override
+    public @Nullable String getPlayerInventoryHandlerName() {
+        return playerInventoryHandlerName;
+    }
+
+    @Override
+    public @NotNull Menu setPlayerInventoryHandlerName(@Nullable String handlerName) {
+        this.playerInventoryHandlerName = handlerName;
+        if (handlerName != null) {
+            this.playerInventoryInteractionEnabled = true;
+        }
+        return this;
+    }
+
+    @Override
+    public boolean isContextAware() {
+        return contextAware;
+    }
+
+    @Override
+    public @NotNull Menu setContextAware(boolean contextAware) {
+        this.contextAware = contextAware;
+        return this;
+    }
+
+    // ==================== EXISTING METHODS ====================
+
     public SimpleMenu setPaginated(int totalPages) {
         this.paginated = true;
         this.totalPages = Math.max(1, totalPages);
@@ -204,27 +322,13 @@ public class SimpleMenu implements Menu {
         if (builder != null) {
             DynamicClickRegistry.clearMenu(fileName);
 
-            Map<String, String> allPlaceholders = new HashMap<>(globalPlaceholders);
-            Map<String, String> dynamicPlaceholders = PlaceholderRegistry.resolveAll(player, fileName);
-            allPlaceholders.putAll(dynamicPlaceholders);
+            Map<String, String> allPlaceholders = buildPlaceholders(player);
 
-            String processedTitle = title;
-            for (Map.Entry<String, String> entry : allPlaceholders.entrySet()) {
-                processedTitle = processedTitle.replace(entry.getKey(), entry.getValue());
-            }
+            String processedTitle = applyPlaceholders(title, allPlaceholders);
 
             Inventory inventory = Bukkit.createInventory(null, size, ColorProcessor.process(processedTitle));
 
-            items.values().stream()
-                    .sorted(Comparator.comparingInt(MenuItem::getPriority))
-                    .forEach(menuItem -> {
-                        MenuItem replaced = menuItem.withReplacedPlaceholders(player, allPlaceholders);
-                        for (int slot : replaced.getSlots()) {
-                            if (slot >= 0 && slot < size) {
-                                inventory.setItem(slot, replaced.getItemStack().clone());
-                            }
-                        }
-                    });
+            populateInventory(inventory, player, allPlaceholders);
 
             BuildContextImpl context = new BuildContextImpl(player, inventory, fileName);
 
@@ -246,6 +350,7 @@ public class SimpleMenu implements Menu {
                 .orElse(null);
     }
 
+    @Nullable
     private String getMenuFileNameForPlayer(@NotNull Player player) {
         return com.mongenscave.mcmenuapi.McMenuAPI.getInstance()
                 .getLoadedMenus()
